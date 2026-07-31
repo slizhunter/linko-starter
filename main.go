@@ -13,6 +13,7 @@ import (
 	"time"
 
 	linkoerr "boot.dev/linko/internal"
+	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/store"
 
 	pkgerr "github.com/pkg/errors"
@@ -41,6 +42,14 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 			fmt.Fprintf(os.Stderr, "failed to cleanup logger: %v\n", err)
 		}
 	}()
+	env := os.Getenv("ENV")
+	hostname, _ := os.Hostname()
+	logger = logger.With(
+		slog.String("git_sha", build.GitSHA),
+		slog.String("build_time", build.BuildTime),
+		slog.String("env", env),
+		slog.String("hostname", hostname),
+	)
 	st, err := store.New(dataDir, logger)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create store: %v", err))
