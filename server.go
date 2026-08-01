@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ func newServer(store store.Store, port int, cancel context.CancelFunc, logger *s
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: requestLogger(s.logger)(mux),
+		Handler: requestIDMiddleware()(requestLogger(s.logger)(mux)),
 	}
 
 	mux.HandleFunc("GET /", s.handlerIndex)
@@ -110,7 +111,7 @@ func (w *spyResponseWriter) WriteHeader(statusCode int) {
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
+			start := time.Now() // Get start time of the request
 			spyReader := &spyReadCloser{ReadCloser: r.Body}
 			r.Body = spyReader
 			spyWriter := &spyResponseWriter{ResponseWriter: w}
@@ -122,6 +123,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.String("client_ip", r.RemoteAddr),
+				slog.String("request_id", spyWriter.Header().Get("X-Request-ID")),
 				slog.Int("request_body_bytes", spyReader.bytesRead),
 				slog.Int("response_body_bytes", spyWriter.bytesWritten),
 				slog.Int("response_status", spyWriter.statusCode),
@@ -134,6 +136,19 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				attrs = append(attrs, slog.String("user", logCtx.Username))
 			}
 			logger.Info("Served request", attrs...)
+		})
+	}
+}
+
+func requestIDMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID := r.Header.Get("X-Request-ID")
+			if requestID == "" {
+				requestID = rand.Text()
+			}
+			w.Header().Set("X-Request-ID", requestID)
+			next.ServeHTTP(w, r)
 		})
 	}
 }
