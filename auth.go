@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -43,8 +44,10 @@ func (s *server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		// Create a *LogContext and store it on the request with r.WithContext and context.WithValue
-		logCtx := r.Context().Value(logContextKey).(*LogContext)
-		logCtx.Username = username
+		if logCtx, ok := r.Context().Value(logContextKey).(*LogContext); ok {
+			logCtx.Username = username
+		}
+		r = r.WithContext(context.WithValue(r.Context(), UserContextKey, username))
 		next.ServeHTTP(w, r)
 	})
 }
