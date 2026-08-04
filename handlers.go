@@ -69,26 +69,26 @@ func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
-	longURL, err := s.store.Lookup(r.Context(), r.PathValue("shortCode"))
+	longURL, err := s.store.Lookup(r.Context(), r.PathValue("shortCode")) // Retrieve the original long URL associated with the short code
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			httpError(r.Context(), w, http.StatusNotFound, errors.New("not found"))
+			httpError(r.Context(), w, http.StatusNotFound, errors.New("not found")) // Return 404 if the short code does not exist
 		} else {
-			httpError(r.Context(), w, http.StatusInternalServerError, fmt.Errorf("internal server error: %w", err))
+			httpError(r.Context(), w, http.StatusInternalServerError, fmt.Errorf("internal server error: %w", err)) // Return 500 for other errors
 		}
 		return
 	}
-	_, _ = bcrypt.GenerateFromPassword([]byte(longURL), bcrypt.DefaultCost)
-	if err := checkDestination(longURL); err != nil {
-		httpError(r.Context(), w, http.StatusBadGateway, errors.New("destination unavailable"))
+	_, _ = bcrypt.GenerateFromPassword([]byte(longURL), bcrypt.DefaultCost) // Hash the long URL to simulate some processing
+	if err := checkDestination(longURL); err != nil {                       // Check if the destination URL is reachable
+		httpError(r.Context(), w, http.StatusBadGateway, errors.New("destination unavailable")) // Return 502 if the destination URL is not reachable
 		return
 	}
 
-	redirectsMu.Lock()
-	redirects = append(redirects, strings.Repeat(longURL, 1024))
-	redirectsMu.Unlock()
+	redirectsMu.Lock()                                           // Lock the redirects slice for concurrent access
+	redirects = append(redirects, strings.Repeat(longURL, 1024)) // Append the long URL to the redirects slice
+	redirectsMu.Unlock()                                         // Unlock the redirects slice after modification
 
-	http.Redirect(w, r, longURL, http.StatusFound)
+	http.Redirect(w, r, longURL, http.StatusFound) // Redirect the client to the original long URL with a 302 status code
 }
 
 func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
